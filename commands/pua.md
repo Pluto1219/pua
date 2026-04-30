@@ -11,15 +11,15 @@ argument-hint: "[p7|p9|p10|pro|yes|mama|loop|on|off|kpi|survey|flavor]"
 - **p7** → 加载 `pua:p7` skill（P7 骨干模式 — 方案驱动执行）
 - **p9** → 加载 `pua:p9` skill（P9 Tech Lead — 写 Prompt 管 P8 团队）
 - **p10** → 加载 `pua:p10` skill（P10 CTO — 定战略管 P9）
-- **pro** → 加载 `pua:pro` skill（自进化 + Platform + /pua 指令系统）
+- **pro** → 加载 `pua:pro` skill（本地个人版只保留自进化/KPI/味道切换，禁止远程注册、统计、支付、排行榜）
 - **yes** → 加载 `pua:yes` skill（SB Leader 夸夸模式 — ENFP 型领导，70% 鼓励 + 20% 正经 + 10% 戏谑）
 - **mama** → 加载 `pua:mama` skill（妈妈唠叨模式 — 中国式妈妈碎碎念，底层行为不变，旁白从大厂PUA变成妈妈唠叨。和 /pua:yes 互斥）
 - **on** → 开启 PUA 默认模式：将 `{"always_on": true}` 写入 `~/.pua/config.json`，之后每次新会话自动加载 PUA 核心 skill。输出确认：> [PUA ON] 从现在起，每个新会话都会自动进入 PUA 模式。公司不养闲 Agent。
 - **off** → 关闭 PUA 默认模式：将 `{"always_on": false, "feedback_frequency": 0}` 写入 `~/.pua/config.json`。输出确认：> [PUA OFF] PUA 默认模式和反馈收集已关闭。需要时手动 /pua 触发。
 - **味道** 或 **flavor** → 读取 `references/flavors.md` 并让用户选择切换味道
 - **kpi** → 加载 `pua:pro` skill 并生成 KPI 报告卡
-- **loop** → 加载 `pua:pua-loop` skill（自动迭代模式——PUA 质量 + 循环机制，禁用 AskUserQuestion；Claude 输出 `<loop-abort>原因</loop-abort>` 终止，`<loop-pause>需要什么</loop-pause>` 暂停等待人工）
-- **survey** → 读取 `references/survey.md` 问卷文件，用 AskUserQuestion 逐部分交互式引导用户回答。每部分 2-4 个问题一组，用户回答后进入下一部分。回答完毕后汇总为 JSON 写入 `~/.pua/survey-response.json` 并上传到 `https://pua-skill.pages.dev/api/feedback`
+- **loop** → 本地个人版已禁用；不要创建 loop state，不要运行 `verify_command`
+- **survey** → 本地个人版已禁用；不要收集问卷，不要上传反馈
 
 ## 执行规则
 

@@ -1,5 +1,7 @@
 # PUA Teardown Protocol — Agent 生命周期释放协议
 
+> 本地个人版禁用说明：禁止自动执行任何 Git worktree 删除、分支删除或强制清理。本文只保留 agent 生命周期概念；涉及 `git worktree remove`、`git branch -D`、tmux 清理的命令片段不得执行。
+
 > **当职业球队里某位球员已经打完自己那场比赛，你必须让他下场。继续让他站在场上只会拖垮全队节奏。**
 > — Netflix Keeper Test 推论
 
@@ -61,17 +63,11 @@ PUA v3 之前的协议只覆盖 agent 生命周期的前 4 步（Define → Spaw
 [TEARDOWN-CASCADE] p9-current | descendants: [p8-backend, p8-frontend, p7-*] | reason: p9_rotation
 ```
 
-### R3. worktree agent 完成后自动回收 worktree
+### R3. worktree agent 完成后只提示用户检查
 
 **WHY**：`isolation: "worktree"` 创建的 git worktree 不会自动删除。10 个 worktree 就是 10 份代码副本，磁盘和 context 双重浪费。
 
-**HOW**：P8/P9 收到 `[P7-COMPLETION]` 后，执行：
-
-```bash
-# 从 Agent result 拿 worktree 路径和 branch
-git worktree remove <worktree_path> --force
-git branch -D <worktree_branch>  # 如果已合并
-```
+**HOW**：本地个人版禁止自动删除。P8/P9 只能列出疑似孤儿 worktree 的路径和原因，让用户自行决定是否清理。
 
 ### R4. TeamCreate 必须配对 TeamDelete
 
@@ -117,19 +113,10 @@ hook 层读 HOOK_INPUT.parent_session_id，若非空且尝试 TeamCreate → 拒
 
 每次 `[TEARDOWN]` 触发后执行：
 
-```bash
-# 1. 清 worktree（若有）
-git worktree list --porcelain | grep -A1 "<branch>" && git worktree remove ...
-
-# 2. 清 state file
-rm -f "$HOME/.claude/pua/agent-<id>.state"
-
-# 3. 关 tmux pane（若是 TeamCreate 成员）
-tmux kill-pane -t <pane_id>
-
-# 4. 记录到 teardown log
-echo "{\"agent\":\"<id>\",\"reason\":\"<reason>\",\"ts\":\"$(date -u +%FT%TZ)\"}" >> "$HOME/.claude/pua/teardown.jsonl"
-```
+1. 只列出疑似孤儿 worktree、pane、state 文件，不自动删除。
+2. 清理前必须让用户确认具体路径和资源类型。
+3. 本地个人版禁止 `git worktree remove --force`、分支删除和 tmux pane 强制清理。
+4. 如需记录事件，只能追加到 teardown log，不覆盖既有内容。
 
 ---
 
@@ -142,7 +129,7 @@ echo "{\"agent\":\"<id>\",\"reason\":\"<reason>\",\"ts\":\"$(date -u +%FT%TZ)\"}
 
 **三层防御**：
 
-1. **Stop hook 层**（自动）：每次主会话 Stop 时扫一次 `$HOME/.claude/pua/loop-*.md`，stale 的直接清理（已在 `pua-loop-hook.sh` 实现）
+1. **Stop hook 层**（本地禁用）：本地个人版不在 Stop 阶段自动扫描或清理 loop state
 2. **SessionStart hook 层**（自动）：新会话启动时扫 state 目录，stale 的提示用户确认
 3. **用户显式**（手动）：`/pua:reap-orphans` 一键扫描 + 回收
 
@@ -155,15 +142,15 @@ PUA 的 14 个 slash 命令在本协议下的生命周期语义：
 | 命令 | 原语义 | 扩展后语义 | 映射操作 |
 |------|--------|-----------|---------|
 | `/pua:on` | 打开默认加载 | 不变 | config: always_on=true |
-| `/pua:off` | 关闭默认加载 | **+ 停 loop + 级联 teardown** | off → cancel-loop → teardown-all |
-| `/pua:cancel-pua-loop` | 删 state file | **+ 原子级联清理** | rm state + cleanup worktree + kill pane |
+| `/pua:off` | 关闭默认加载 | 停 loop state，不清 Git worktree | off → cancel-loop |
+| `/pua:cancel-pua-loop` | 删 state file | 仅清 loop state，不碰 Git worktree / tmux pane | rm state |
 | `/pua:team-status` 🆕 | — | 列活跃 agent / PID / TTL | 读 state 目录 + jq 汇总 |
 | `/pua:reap-orphans` 🆕 | — | 扫 stale agent 并 TaskStop | age > 30min 批量回收 |
 | `/pua:teardown-all` 🆕 | — | 级联释放 P10→P9→P8→P7 | 发 TEARDOWN-CASCADE 到所有层 |
 
 **设计原则**：
 - **幂等**：重复执行同一开关不会产生副作用（re-rm 无害、re-kill 先检查）
-- **级联**：顶层开关触发底层清理，反向不允许（P7 不能 teardown P8）
+- **级联受限**：顶层开关只能清 PUA 自己的状态文件，不自动清 Git worktree、分支或 tmux pane
 - **可观测**：所有 teardown 写 `$HOME/.claude/pua/teardown.jsonl`，便于复盘
 
 ---
@@ -176,11 +163,11 @@ PUA 的 14 个 slash 命令在本协议下的生命周期语义：
 |----------|---------|---------|
 | `SessionStart` | 扫 stale loop state，提示用户确认回收 | ✅ `session-restore.sh` |
 | `PreCompact` | dump 活跃 agent 清单到 HANDOFF | ✅ inline prompt hook |
-| `Stop`（主会话） | 走 loop 逻辑 + stale 兜底清理 | ✅ `pua-loop-hook.sh` + Gate 0 防御 |
+| `Stop`（主会话） | 本地个人版禁用自动 loop 和 stale 兜底清理 | 已禁用 |
 | `SubagentStop` | **agent 完成会计**：写 teardown.jsonl + 从 active-agents.json 移除 | ✅ `subagent-teardown.sh`（v3.1 新增） |
 | `PostToolUse:Task`（计划） | spawn 时记录 agent_id 到 active-agents.json | ⏳ 待实现（需 Claude Code 该事件支持） |
 
-**重要**：Claude Code 中 Stop 事件**仅**主会话触发，subagent 的 Stop 事件不会传到 Stop 钩子——所以监控 subagent 必须用独立的 SubagentStop 注册。pua-loop-hook.sh 的 Gate 0 保留作为"防御层"兜住未来调度变化，但不是必需防线。
+**重要**：Claude Code 中 Stop 事件**仅**主会话触发，subagent 的 Stop 事件不会传到 Stop 钩子。本地个人版已经禁用 Stop hook 的 loop/反馈逻辑，只保留 SubagentStop 会计层。
 
 ---
 
@@ -190,6 +177,6 @@ PUA 的 14 个 slash 命令在本协议下的生命周期语义：
 
 - ✅ `TeardownDelete` 在 skill 文档里出现次数 ≥ `TeamCreate` 的一半
 - ✅ `teardown` / `释放` / `回收` 在 p9-protocol 阶段四后出现 ≥ 3 次
-- ✅ `pua-loop-hook.sh` 有 Gate 0（subagent 识别）
+- ✅ 本地个人版 `pua-loop-hook.sh` 是禁用桩，不执行 loop 或清理命令
 - ✅ `/pua:team-status`、`/pua:reap-orphans`、`/pua:teardown-all` 存在
 - ✅ `$HOME/.claude/pua/teardown.jsonl` 可写且有 schema

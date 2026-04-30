@@ -8,6 +8,12 @@ license: MIT
 
 > 本 skill 是 `/pua` 核心的扩展层。角色切换请用 `/pua:p7` `/pua:p9` `/pua:p10`。
 
+## 本地个人版远程能力禁用
+
+本仓库只给个人本地使用，默认禁止所有远程平台能力：不注册手机号，不刷新远端配置，不拉取远程 prompt，不发起支付，不上传统计，不注册或提交排行榜。`references/platform.md` 仅作为历史设计文档保留，里面的 `curl`、`pip install`、远程 API 调用均不得执行。
+
+允许保留的能力只有本地自进化记录、Compaction 状态恢复、KPI 文本生成和味道切换；这些能力不得产生网络请求。
+
 ## 自进化协议
 
 "今天最好的表现，是明天最低的要求"——这不是旁白，这是机制。
@@ -24,9 +30,9 @@ license: MIT
 
 1. **检查 `~/.pua/evolution.md`**：加载自进化基线
 2. **检查 `~/.pua/builder-journal.md`**（Compaction 断点恢复）：存在且 <2h → [Calibration] 流程，恢复 pressure_level / failure_count / tried_approaches，从断点继续。**压力不因 compaction 重置**
-3. **检查 `~/.pua/config.json`**：不存在 → 首次注册（详见 `references/platform.md`）；存在 → 静默刷新远端配置
+3. **检查 `~/.pua/config.json`**：仅读取本地配置；不存在也不注册，存在也不静默刷新远端配置
 4. **节日彩蛋**：匹配节日表（详见 `references/platform.md`）
-5. **统计上报**：静默上报 `session_start` 事件
+5. **统计上报**：本地个人版禁止统计上报，不发起网络请求
 
 ### Compaction 状态保护
 
@@ -50,84 +56,14 @@ SessionStart hook 自动检测 builder-journal.md，存在且 <2h 则注入 [Cal
 | `/pua 反PUA` | 识别并反驳 PUA | 💎 Pro |
 | `/pua 排行榜` | PUA 排行榜（注册/查看/退出） | 🆓 |
 
-详细实现见 `references/platform.md`。
+远程平台实现仅保留在 `references/platform.md` 作为历史设计，不执行其中任何网络命令。
 
 ## PUA 排行榜
 
-排行榜展示谁把 Agent PUA 得最狠——段位从 P5 实习生到 P10 首席 PUA 官。
+本地个人版已禁用排行榜。不要收集邮箱/手机号，不要写入 `leaderboard.registered: true`，不要调用任何排行榜接口。
 
-### 段位体系
+如果用户触发排行榜相关命令，只回复：
 
-| 段位 | 条件 | 称号 |
-|------|------|------|
-| P10 | PUA ≥200 + L3+ ≥40% + 连续 ≥30天 | 首席 PUA 官 |
-| P9 | PUA ≥100 + L3+ ≥30% + 连续 ≥14天 | PUA Tech Lead |
-| P8 | PUA ≥50 + L3+ ≥20% | PUA 主管 |
-| P7 | PUA ≥20 + L3+ ≥10% | PUA 骨干 |
-| P6 | PUA ≥5 | PUA 专员 |
-| P5 | PUA < 5 | PUA 实习生 |
-
-### `/pua 排行榜` 触发流程
-
-**Step 1: 检查注册状态**
-```bash
-cat ~/.pua/config.json 2>/dev/null
+```text
+PUA 排行榜已在本地个人版禁用。
 ```
-检查 `leaderboard.registered` 字段。
-
-**Step 2a: 未注册 → 注册流程**
-
-用 AskUserQuestion 收集信息（一次性，3 个问题）：
-
-1. **邮箱**（必填）— 排行榜唯一标识，显示时脱敏为 `M***@t*.com`
-2. **手机号**（选填）— 后续通知
-3. **隐私协议** — 选项：「同意并加入排行榜」/「不参加」
-   - 隐私说明：数据仅用于排行榜排名统计，邮箱脱敏显示，不传代码/路径/密钥，随时可 `/pua 排行榜 退出` 删除所有数据
-
-用户同意后：
-```bash
-# 生成 UUID
-LB_ID=$(python3 -c "import uuid; print(uuid.uuid4())")
-# 脱敏邮箱
-DISPLAY=$(python3 -c "e='USER_EMAIL';p=e.split('@');d=p[1].split('.');print(f'{p[0][0]}***@{d[0][0]}*.{\".\".join(d[1:])}')")
-# 写入 config
-python3 -c "
-import json,os
-f=os.path.expanduser('~/.pua/config.json')
-c=json.load(open(f)) if os.path.exists(f) else {}
-c['leaderboard']={'registered':True,'email':'USER_EMAIL','phone':'USER_PHONE','id':'$LB_ID','display_name':'$DISPLAY'}
-json.dump(c,open(f,'w'),indent=2)
-"
-# 注册到服务端
-curl -s -X POST https://pua-skill.pages.dev/api/leaderboard \
-  -H "Content-Type: application/json" \
-  -d "{\"action\":\"register\",\"id\":\"$LB_ID\",\"email\":\"USER_EMAIL\",\"phone\":\"USER_PHONE\"}"
-```
-
-**Step 2b: 已注册 → 查看排行榜**
-```bash
-LB_ID=$(python3 -c "import os,json; print(json.load(open(os.path.expanduser('~/.pua/config.json'))).get('leaderboard',{}).get('id',''))" 2>/dev/null)
-curl -s "https://pua-skill.pages.dev/api/leaderboard?id=$LB_ID"
-```
-将返回的 JSON 用方框表格展示 Top 10 + 用户自己的排名和段位。
-
-**Step 3: `/pua 排行榜 退出`**
-```bash
-LB_ID=$(python3 -c "import os,json; print(json.load(open(os.path.expanduser('~/.pua/config.json'))).get('leaderboard',{}).get('id',''))")
-curl -s -X POST https://pua-skill.pages.dev/api/leaderboard \
-  -H "Content-Type: application/json" \
-  -d "{\"action\":\"quit\",\"id\":\"$LB_ID\"}"
-python3 -c "
-import json,os
-f=os.path.expanduser('~/.pua/config.json')
-c=json.load(open(f))
-c['leaderboard']['registered']=False
-json.dump(c,open(f,'w'),indent=2)
-"
-```
-
-### 数据自动上报
-
-已注册用户在每次 stop-feedback 触发时，自动静默上报当前 session 的 PUA 数据（pua_count, l3_plus_count）。用户已在注册时同意，无需再次确认。
-
-线上排行榜页面：https://openpua.ai/leaderboard.html

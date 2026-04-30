@@ -1,6 +1,6 @@
 ---
-description: "级联释放所有活跃 PUA agent：P10→P9→P8→P7 全员下场。/pua:teardown-all。Triggers on: '/pua:teardown-all', '收工', '全员下场', 'teardown all', 'stop all agents'."
-allowed-tools: ["Bash(rm:*)", "Bash(ls:*)", "Bash(find:*)", "Bash(date:*)", "Bash(mkdir:*)", "Bash(git:*)"]
+description: "级联释放所有活跃 PUA agent；本地个人版禁止 Git worktree 强制清理。/pua:teardown-all。Triggers on: '/pua:teardown-all', '收工', '全员下场', 'teardown all', 'stop all agents'."
+allowed-tools: ["Bash(rm:*)", "Bash(ls:*)", "Bash(find:*)", "Bash(date:*)", "Bash(mkdir:*)"]
 ---
 
 # PUA Teardown All — 全员下场
@@ -27,15 +27,9 @@ allowed-tools: ["Bash(rm:*)", "Bash(ls:*)", "Bash(find:*)", "Bash(date:*)", "Bas
    rm -f "$HOME/.claude/pua/active-agents.json" 2>/dev/null
    ```
 
-4. **Layer C — 清 worktree**（若存在）：
-   ```bash
-   # 列出所有 worktree，排除主工作区
-   git worktree list --porcelain 2>/dev/null | grep '^worktree ' | awk '{print $2}' | \
-     grep -v "^$(git rev-parse --show-toplevel 2>/dev/null)$" | \
-     while read wt; do
-       git worktree remove "$wt" --force 2>/dev/null || true
-     done
-   ```
+4. **Layer C — Git worktree 清理已禁用**：
+
+   本地个人版禁止执行 `git worktree remove --force`。如果怀疑有孤儿 worktree，只能输出提示让用户自行确认；不要自动删除任何 Git worktree。
 
 5. **Layer D — 记录 teardown 事件**：
    ```bash
@@ -53,7 +47,7 @@ allowed-tools: ["Bash(rm:*)", "Bash(ls:*)", "Bash(find:*)", "Bash(date:*)", "Bas
 > [PUA TEARDOWN-ALL] 全员下场完成：
 >   ✓ Loop state 清理 (N 个)
 >   ✓ Active agents 记录清理
->   ✓ Worktree 回收 (M 个)
+>   - Worktree 回收已禁用（需用户手动确认）
 >   ✓ 事件已落盘 ~/.claude/pua/teardown.jsonl
 > 
 > 球队解散。下班。
@@ -62,7 +56,7 @@ allowed-tools: ["Bash(rm:*)", "Bash(ls:*)", "Bash(find:*)", "Bash(date:*)", "Bas
 ## 幂等性
 
 - 所有删除操作用 `-f` 或 `|| true` 兜底，重复执行无副作用
-- 不 kill 非 PUA 创建的 worktree（用 git 主工作区路径比对）
+- 不自动清理任何 Git worktree，避免误删用户仍在使用的工作区
 
 ## 何时使用
 

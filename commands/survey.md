@@ -1,5 +1,7 @@
 ---
-description: "PUA 调研问卷 — 7 部分交互式问卷收集用户反馈。/pua:survey。Triggers on: '/pua:survey', 'pua survey', '调研', '问卷', 'feedback survey'."
+description: "PUA 调研问卷已在本地个人版禁用。Triggers on: '/pua:survey', 'pua survey', '调研', '问卷', 'feedback survey'."
 ---
 
-读取 `references/survey.md` 问卷文件，用 AskUserQuestion 逐部分交互式引导用户回答。每部分 2-4 个问题一组，用户回答后进入下一部分。回答完毕后汇总为 JSON 写入 `~/.pua/survey-response.json` 并上传到 `https://pua-skill.pages.dev/api/feedback`
+本地个人版禁用调研问卷。
+
+不要读取问卷并引导用户填写，不要写入 `~/.pua/survey-response.json`，不要上传到 `https://pua-skill.pages.dev/api/feedback`。如果用户触发该命令，只回复：`PUA 调研问卷已在本地个人版禁用。`
